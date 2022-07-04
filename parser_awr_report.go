@@ -120,6 +120,7 @@ func main() {
 	lines := 0
 	startln := 0
 	endln := 10000
+	maxSize := 4096
 	fpath := "upload/awr-hist-1288227953-ORCL-14815-14820.out"
 	//open report file
 	rf, err := os.Open(fpath)
@@ -127,8 +128,16 @@ func main() {
 		fmt.Print("Error opening the file: ", err)
 	}
 	defer rf.Close()
+	finf, err := rf.Stat()
+	if err != nil {
+		fmt.Print("Error getting information about the file: ", err)
+	}
+	maxSize = int(finf.Size())
 	scan := bufio.NewScanner(rf)
-	scan.Split(bufio.ScanLines)
+	// Setting the buffer
+	buf := make([]byte, 0, maxSize)
+	scan.Buffer(buf, maxSize)
+	//scan.Split(bufio.ScanLines)
 	for scan.Scan() {
 		lines++
 		if len("~~BEGIN-OS-INFORMATION~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-OS-INFORMATION~~", scan.Text()) {
@@ -164,8 +173,7 @@ func main() {
 			parse_section_2("SGA-ADVICE", *scan, startln)
 		}
 
-		//if len("~~BEGIN-MEMORY-PGA-ADVICE~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY-PGA-ADVICE~~", scan.Text()) {
-		if strings.Contains(scan.Text(), "~~BEGIN-MEMORY-PGA-ADVICE~~") {
+		if len("~~BEGIN-MEMORY-PGA-ADVICE~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY-PGA-ADVICE~~", scan.Text()) {
 			pga_advice_info(lines)
 			startln = 3
 			parse_section_2("MEMORY-PGA-ADVICE", *scan, startln)
