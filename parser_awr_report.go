@@ -129,6 +129,30 @@ func parse_section(sname string, fpath string, startln int, endln int) {
 
 	}
 }
+
+func prepareStmtTxt(t string, sdata []string) string {
+	//Prepare the text fo the statement
+	stmttxtstart := "insert into " + t + "(" //id, rnd_str,use_date) values (?,?,?)"
+	stmttxtend := ") values("
+	for _, v := range sdata {
+		stmttxtstart = stmttxtstart + v + ","
+		stmttxtend = stmttxtend + "?,"
+	}
+	stmttxtend = strings.Replace(stmttxtend+")", ",)", ")", 1)
+	stmttxt := strings.Replace(stmttxtstart+")", ",)", stmttxtend, 1)
+	// stmt, err := db.Prepare(stmttxt)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer stmt.Close()
+	// for i := 1; i <= 5; i++ {
+	// 	if _, err := stmt.Exec(i, "Test "+strconv.Itoa(i), time.Now()); err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// }
+	return stmttxt
+}
+
 func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 	lines := 0
 	//fmt.Println(scan.Text())
@@ -141,7 +165,9 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 			sdata := strings.Fields(scan.Text())
 			sdata = append(sdata, "MYFILENAME", "USEDATE")
 			fmt.Println(sdata)
+			fmt.Println(prepareStmtTxt(sname, sdata))
 		}
+		//
 		if lines > startln && len(scan.Text()) > 0 {
 			sdata := strings.Fields(scan.Text())
 			sdata = append(sdata, "MyFileName", time.Now().Format("2006/01/02T15:04:05"))
