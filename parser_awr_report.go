@@ -155,6 +155,7 @@ func prepareStmtTxt(t string, sdata []string) (inserttxt string, createtable str
 	// }
 	return inserttxt, createtable
 }
+
 func checkDBObject(dbname string, objname string) (int, error) {
 	//
 	defer elapsedTime(time.Now(), "chekObject")
