@@ -179,6 +179,7 @@ func execStmt(tdll string) error {
 
 func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 	lines := 0
+	var stmt *sql.Stmt
 	//fmt.Println(scan.Text())
 	for scan.Scan() {
 		lines++
@@ -194,24 +195,30 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 			fmt.Println(sdata)
 			// Prepare the insert
 			inserttxt, createtable = prepareStmtTxt(sname, sdata)
+
+			//check if the table exists
+			chk, chkerr := checkDBObject("testdb", sname)
+			if chkerr != nil {
+				log.Fatal(chkerr)
+			}
+			fmt.Println(chk)
+			if chk == 0 {
+				//
+				errddl := execStmt(createtable)
+				if errddl != nil {
+					log.Fatalf("Unable to create object: %s", errddl)
+				}
+			}
+			var stmterr error
+			stmt, stmterr = db.Prepare(inserttxt)
+			if stmterr != nil {
+				log.Fatal(stmterr)
+			}
+			defer stmt.Close()
 		}
 		fmt.Println(inserttxt)
 		fmt.Println(createtable)
 
-		//check if the table exists
-		chk, chkerr := checkDBObject("testdb", sname)
-		if chkerr != nil {
-			log.Fatal(chkerr)
-		}
-		fmt.Println(chk)
-		// if chk == 0 {
-		// 	//
-		// 	errddl := execStmt(createtable)
-		// 	if errddl != nil {
-		// 		log.Fatalf("Unable to create object: %s", errddl)
-		// 	}
-		// }
-		//stmt, err := db.Prepare(stmttxt)
 		//
 		if lines > startln && len(scan.Text()) > 0 {
 			sdata := strings.Fields(scan.Text())
@@ -221,6 +228,10 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 				//fmt.Print(i)
 			}
 			fmt.Print("\n")
+			if _, execerr := stmt.Exec(sdata); execerr != nil {
+				log.Fatal(execerr)
+			}
+
 			//fmt.Println(sdata)
 		}
 	}
@@ -238,37 +249,31 @@ func main() {
 	//parse input variables
 	flag.Parse()
 	//Check db connection
-	//if *isUploadDB {
-	//configuration
-	mySQLcfg := mysql.Config{
-		User:                 os.Getenv("DBUSER"),
-		Passwd:               os.Getenv("DBPASS"),
-		Net:                  "tcp",
-		Addr:                 os.Getenv("DBHOST") + ":3306",
-		DBName:               os.Getenv("DBNAME"),
-		AllowNativePasswords: true,
-	}
-	db, err := sql.Open("mysql", mySQLcfg.FormatDSN())
-	if err != nil {
-		log.Fatal(err)
-	}
-	t1 := time.Now()
+	if *isUploadDB {
+		//configuration
+		mySQLcfg := mysql.Config{
+			User:                 os.Getenv("DBUSER"),
+			Passwd:               os.Getenv("DBPASS"),
+			Net:                  "tcp",
+			Addr:                 os.Getenv("DBHOST") + ":3306",
+			DBName:               os.Getenv("DBNAME"),
+			AllowNativePasswords: true,
+		}
+		var dberr error
+		db, dberr = sql.Open("mysql", mySQLcfg.FormatDSN())
+		if dberr != nil {
+			log.Fatal(dberr)
+		}
+		t1 := time.Now()
 
-	pingErr := db.Ping()
-	el := time.Since(t1)
-	if pingErr != nil {
-		log.Fatal(pingErr)
-	}
-	//el := time.Since(t1)
-	fmt.Println("Connected!")
-	fmt.Println(el)
-	//}
-	chk, chkerr := checkDBObject("testdb", "OS")
-	if err != nil {
-		log.Fatal(chkerr)
-	}
-	if chk == 0 {
-		fmt.Println(chk)
+		pingErr := db.Ping()
+		el := time.Since(t1)
+		if pingErr != nil {
+			log.Fatal(pingErr)
+		}
+		//el := time.Since(t1)
+		fmt.Println("Connected!")
+		fmt.Println(el)
 	}
 
 	//open report file
@@ -292,8 +297,8 @@ func main() {
 		if len("~~BEGIN-OS-INFORMATION~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-OS-INFORMATION~~", scan.Text()) {
 			os_info(lines)
 			startln = 2
-			fmt.Println(startln)
-			//parse_section_2("OS", *scan, startln)
+			//fmt.Println(startln)
+			parse_section_2("OS", *scan, startln)
 		}
 
 		if len("~~BEGIN-PATCH-HISTORY~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-PATCH-HISTORY~~", scan.Text()) {
