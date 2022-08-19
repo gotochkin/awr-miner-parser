@@ -197,10 +197,11 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 		fmt.Println(createtable)
 
 		//check if the table exists
-		// chk, chkerr := checkDBObject("testdb", sname)
-		// if chkerr != nil {
-		// 	log.Fatal(chkerr)
-		// }
+		chk, chkerr := checkDBObject("testdb", sname)
+		if chkerr != nil {
+			log.Fatal(chkerr)
+		}
+		fmt.Println(chk)
 		// if chk == 0 {
 		// 	//
 		// 	errddl := execStmt(createtable)
