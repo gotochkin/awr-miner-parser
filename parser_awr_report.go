@@ -130,16 +130,19 @@ func parse_section(sname string, fpath string, startln int, endln int) {
 	}
 }
 
-func prepareStmtTxt(t string, sdata []string) string {
+func prepareStmtTxt(t string, sdata []string) (inserttxt string, createtable string) {
 	//Prepare the text fo the statement
-	stmttxtstart := "insert into " + t + "(" //id, rnd_str,use_date) values (?,?,?)"
-	stmttxtend := ") values("
+	insertstart := "insert into " + t + "(" //id, rnd_str,use_date) values (?,?,?)"
+	insertend := ") values("
+	createtable = "CREATE TABLE " + t + " ("
 	for _, v := range sdata {
-		stmttxtstart = stmttxtstart + v + ","
-		stmttxtend = stmttxtend + "?,"
+		insertstart = insertstart + v + ","
+		insertend = insertend + "?,"
+		createtable = createtable + v + " varchar(100),"
 	}
-	stmttxtend = strings.Replace(stmttxtend+")", ",)", ")", 1)
-	stmttxt := strings.Replace(stmttxtstart+")", ",)", stmttxtend, 1)
+	insertend = strings.Replace(insertend+")", ",)", ")", 1)
+	inserttxt = strings.Replace(insertstart+")", ",)", insertend, 1)
+	createtable = strings.Replace(createtable+")", ",)", ")", 1)
 	// stmt, err := db.Prepare(stmttxt)
 	// if err != nil {
 	// 	log.Fatal(err)
@@ -150,7 +153,26 @@ func prepareStmtTxt(t string, sdata []string) string {
 	// 		log.Fatal(err)
 	// 	}
 	// }
-	return stmttxt
+	return inserttxt, createtable
+}
+func checkDBObject(dbname string, objname string) (int, error) {
+	//
+	defer elapsedTime(time.Now(), "chekObject")
+	var cnt int
+	err := db.QueryRow("select count(*) from information_schema.tables where table_schema=? and table_name=?", dbname, objname).Scan(&cnt)
+	if err != nil {
+		return 0, fmt.Errorf("DB.QueryRow: %v", err)
+	}
+	if cnt > 0 {
+		return cnt, nil
+	}
+	return cnt, nil
+}
+
+func execStmt(tdll string) error {
+	//
+	_, err := db.Exec(tdll)
+	return err
 }
 
 func parse_section_2(sname string, scan bufio.Scanner, startln int) {
@@ -161,12 +183,32 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 		if strings.Contains(scan.Text(), "~~END-") {
 			break
 		}
+		inserttxt := ""
+		createtable := ""
+
 		if lines == startln-1 {
 			sdata := strings.Fields(scan.Text())
 			sdata = append(sdata, "MYFILENAME", "USEDATE")
 			fmt.Println(sdata)
-			fmt.Println(prepareStmtTxt(sname, sdata))
+			// Prepare the insert
+			inserttxt, createtable = prepareStmtTxt(sname, sdata)
 		}
+		fmt.Println(inserttxt)
+		fmt.Println(createtable)
+
+		//check if the table exists
+		// chk, chkerr := checkDBObject("testdb", sname)
+		// if chkerr != nil {
+		// 	log.Fatal(chkerr)
+		// }
+		// if chk == 0 {
+		// 	//
+		// 	errddl := execStmt(createtable)
+		// 	if errddl != nil {
+		// 		log.Fatalf("Unable to create object: %s", errddl)
+		// 	}
+		// }
+		//stmt, err := db.Prepare(stmttxt)
 		//
 		if lines > startln && len(scan.Text()) > 0 {
 			sdata := strings.Fields(scan.Text())
@@ -193,31 +235,32 @@ func main() {
 	//parse input variables
 	flag.Parse()
 	//Check db connection
-	if *isUploadDB {
-		//configuration
-		mySQLcfg := mysql.Config{
-			User:                 os.Getenv("DBUSER"),
-			Passwd:               os.Getenv("DBPASS"),
-			Net:                  "tcp",
-			Addr:                 os.Getenv("DBHOST") + ":3306",
-			DBName:               os.Getenv("DBNAME"),
-			AllowNativePasswords: true,
-		}
-		db, err := sql.Open("mysql", mySQLcfg.FormatDSN())
-		if err != nil {
-			log.Fatal(err)
-		}
-		t1 := time.Now()
-
-		pingErr := db.Ping()
-		el := time.Since(t1)
-		if pingErr != nil {
-			log.Fatal(pingErr)
-		}
-		//el := time.Since(t1)
-		fmt.Println("Connected!")
-		fmt.Println(el)
+	//if *isUploadDB {
+	//configuration
+	mySQLcfg := mysql.Config{
+		User:                 os.Getenv("DBUSER"),
+		Passwd:               os.Getenv("DBPASS"),
+		Net:                  "tcp",
+		Addr:                 os.Getenv("DBHOST") + ":3306",
+		DBName:               os.Getenv("DBNAME"),
+		AllowNativePasswords: true,
 	}
+	db, err := sql.Open("mysql", mySQLcfg.FormatDSN())
+	if err != nil {
+		log.Fatal(err)
+	}
+	t1 := time.Now()
+
+	pingErr := db.Ping()
+	el := time.Since(t1)
+	if pingErr != nil {
+		log.Fatal(pingErr)
+	}
+	//el := time.Since(t1)
+	fmt.Println("Connected!")
+	fmt.Println(el)
+	//}
+
 	//open report file
 	rf, err := os.Open(fpath)
 	if err != nil {
@@ -241,10 +284,6 @@ func main() {
 			startln = 2
 			parse_section_2("OS", *scan, startln)
 		}
-		// if len("~~END-OS-INFORMATION~~") == len(scan.Text()) && strings.EqualFold("~~END-OS-INFORMATION~~", scan.Text()) {
-		// 	endln = lines
-		// 	//parse_section("OS Information", fpath, startln, endln)
-		// }
 
 		if len("~~BEGIN-PATCH-HISTORY~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-PATCH-HISTORY~~", scan.Text()) {
 			patch_info(lines)
@@ -252,27 +291,22 @@ func main() {
 			parse_section_2("PATCH", *scan, startln)
 		}
 
-		// if len("~~END-PATCH-HISTORY~~") == len(scan.Text()) && strings.EqualFold("~~END-PATCH-HISTORY~~", scan.Text()) {
-		// 	endln = lines
-		// 	//parse_section("Patch Information", fpath, startln, endln)
-		// }
-
 		if len("~~BEGIN-MEMORY~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY~~", scan.Text()) {
 			mem_info(lines)
 			startln = 3
-			parse_section_2("MEMORY", *scan, startln)
+			//parse_section_2("MEMORY", *scan, startln)
 		}
 
 		if len("~~BEGIN-MEMORY-SGA-ADVICE~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY-SGA-ADVICE~~", scan.Text()) {
 			sga_advice_info(lines)
 			startln = 3
-			parse_section_2("SGA-ADVICE", *scan, startln)
+			//parse_section_2("SGA-ADVICE", *scan, startln)
 		}
 
 		if len("~~BEGIN-MEMORY-PGA-ADVICE~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY-PGA-ADVICE~~", scan.Text()) {
 			pga_advice_info(lines)
 			startln = 3
-			parse_section_2("MEMORY-PGA-ADVICE", *scan, startln)
+			//parse_section_2("MEMORY-PGA-ADVICE", *scan, startln)
 		}
 
 		if len("~~BEGIN-SIZE-ON-DISK~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-SIZE-ON-DISK~~", scan.Text()) {
