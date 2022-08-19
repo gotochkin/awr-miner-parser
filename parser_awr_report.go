@@ -161,7 +161,8 @@ func checkDBObject(dbname string, objname string) (int, error) {
 	var cnt int
 	err := db.QueryRow("select count(*) from information_schema.tables where table_schema=? and table_name=?", dbname, objname).Scan(&cnt)
 	if err != nil {
-		return 0, fmt.Errorf("DB.QueryRow: %v", err)
+		//return 0, fmt.Errorf("DB.QueryRow: %v", err)
+		return -1, err
 	}
 	if cnt > 0 {
 		return cnt, nil
@@ -261,6 +262,13 @@ func main() {
 	fmt.Println("Connected!")
 	fmt.Println(el)
 	//}
+	chk, chkerr := checkDBObject("testdb", "OS")
+	if err != nil {
+		log.Fatal(chkerr)
+	}
+	if chk == 0 {
+		fmt.Println(chk)
+	}
 
 	//open report file
 	rf, err := os.Open(fpath)
@@ -283,13 +291,14 @@ func main() {
 		if len("~~BEGIN-OS-INFORMATION~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-OS-INFORMATION~~", scan.Text()) {
 			os_info(lines)
 			startln = 2
-			parse_section_2("OS", *scan, startln)
+			fmt.Println(startln)
+			//parse_section_2("OS", *scan, startln)
 		}
 
 		if len("~~BEGIN-PATCH-HISTORY~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-PATCH-HISTORY~~", scan.Text()) {
 			patch_info(lines)
 			startln = 3
-			parse_section_2("PATCH", *scan, startln)
+			//parse_section_2("PATCH", *scan, startln)
 		}
 
 		if len("~~BEGIN-MEMORY~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY~~", scan.Text()) {
