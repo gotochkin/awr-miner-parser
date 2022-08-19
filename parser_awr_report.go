@@ -223,12 +223,15 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 		if lines > startln && len(scan.Text()) > 0 {
 			sdata := strings.Fields(scan.Text())
 			sdata = append(sdata, "MyFileName", time.Now().Format("2006/01/02T15:04:05"))
+			fmt.Println(strings.Join(sdata, ","))
+			vargs := []any{}
 			for _, v := range sdata {
 				fmt.Print(v + " ")
 				//fmt.Print(i)
+				vargs = append(vargs, v)
 			}
 			fmt.Print("\n")
-			if _, execerr := stmt.Exec(sdata); execerr != nil {
+			if _, execerr := stmt.Exec(vargs...); execerr != nil {
 				log.Fatal(execerr)
 			}
 
