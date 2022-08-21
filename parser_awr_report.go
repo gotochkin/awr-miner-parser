@@ -219,6 +219,11 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 		fmt.Println(inserttxt)
 		fmt.Println(createtable)
 
+		if lines == startln {
+			sdata := strings.Fields(scan.Text())
+			fmt.Println(sdata)
+		}
+
 		//
 		if lines > startln && len(scan.Text()) > 0 {
 			sdata := strings.Fields(scan.Text())
@@ -231,9 +236,10 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 				vargs = append(vargs, v)
 			}
 			fmt.Print("\n")
-			if _, execerr := stmt.Exec(vargs...); execerr != nil {
-				log.Fatal(execerr)
-			}
+			fmt.Println(sdata[0])
+			// if _, execerr := stmt.Exec(vargs...); execerr != nil {
+			// 	log.Fatal(execerr)
+			// }
 
 			//fmt.Println(sdata)
 		}
