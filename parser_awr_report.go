@@ -50,46 +50,6 @@ func elapsedTime(t1 time.Time, fname string) {
 	log.Printf("%s executed in %s", fname, el)
 }
 
-func os_info(lines int) {
-	fmt.Print("Starting parsing OS information from line ", lines, "\n")
-
-}
-
-func patch_info(lines int) {
-	fmt.Print("Starting parsing patching information from line ", lines, "\n")
-
-}
-
-func mem_info(lines int) {
-	fmt.Print("Starting parsing memory information from line ", lines, "\n")
-
-}
-
-func sga_advice_info(lines int) {
-	fmt.Print("Starting parsing sga advice information from line ", lines, "\n")
-
-}
-
-func pga_advice_info(lines int) {
-	fmt.Print("Starting parsing PGA advice information from line ", lines, "\n")
-
-}
-
-func size_info(lines int) {
-	fmt.Print("Starting parsing size on the disk information from line ", lines, "\n")
-
-}
-
-func osstat_info(lines int) {
-	fmt.Print("Starting parsing os stat information from line ", lines, "\n")
-
-}
-
-func main_metrics_info(lines int) {
-	fmt.Print("Starting parsing main metrics information from line ", lines, "\n")
-
-}
-
 const os_info_create_table = "create table OS_INFORMATION (file_id varchar2(200),stat_name varchar2(50),stat_value varchar2(50))"
 
 func parse_section(sname string, fpath string, startln int, endln int) {
@@ -140,9 +100,9 @@ func prepareStmtTxt(t string, sdata []string) (inserttxt string, createtable str
 	insertend := ") values("
 	createtable = "CREATE TABLE " + t + " ("
 	for _, v := range sdata {
-		insertstart = insertstart + strings.ToUpper(v) + ","
+		insertstart = insertstart + "`" + strings.ToUpper(v) + "`,"
 		insertend = insertend + "?,"
-		createtable = createtable + strings.ToUpper(v) + " varchar(150),"
+		createtable = createtable + "`" + strings.ToUpper(v) + "` varchar(150),"
 	}
 	insertend = strings.Replace(insertend+")", ",)", ")", 1)
 	inserttxt = strings.Replace(insertstart+")", ",)", insertend, 1)
@@ -197,12 +157,20 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int, fname string
 			if chkerr != nil {
 				log.Fatal(chkerr)
 			}
+			// Purge data for the same filename statement
+			purgestmt := "DELETE FROM `" + strings.ToUpper(sname) + "`"
 			fmt.Println(chk)
 			if chk == 0 {
 				//
 				errddl := execStmt(createtable)
 				if errddl != nil {
 					log.Fatalf("Unable to create object: %s", errddl)
+				}
+			} else {
+				//Delete the data to avoid duplicates from previous unsuccessful imports
+				errpurge := execStmt(purgestmt)
+				if errpurge != nil {
+					log.Fatal(errpurge)
 				}
 			}
 
@@ -213,8 +181,6 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int, fname string
 			}
 			defer stmt.Close()
 		}
-		//fmt.Println(inserttxt)
-		//fmt.Println(createtable)
 
 		// Get the columns length
 		if lines == startln {
@@ -232,8 +198,12 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int, fname string
 					sdata = append(sdata, scan.Text()[ind:len(i)+ind])
 					ind = ind + len(i) + 1
 				} else {
-					//
-					sdata = append(sdata, scan.Text()[ind:len(scan.Text())])
+					//For the last column
+					if len(scan.Text()) >= ind {
+						sdata = append(sdata, scan.Text()[ind:len(scan.Text())])
+					} else {
+						sdata = append(sdata, "")
+					}
 				}
 			}
 			sdata = append(sdata, fname, time.Now().Format("2006/01/02T15:04:05"))
@@ -314,56 +284,96 @@ func main() {
 	for scan.Scan() {
 		lines++
 		if len("~~BEGIN-OS-INFORMATION~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-OS-INFORMATION~~", scan.Text()) {
-			os_info(lines)
+			fmt.Print("Starting parsing OS-INFORMATION information from line ", lines, "\n")
 			startln = 2
 			parse_section_2("OS", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-PATCH-HISTORY~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-PATCH-HISTORY~~", scan.Text()) {
-			patch_info(lines)
+			fmt.Print("Starting parsing PATCH-HISTORY information from line ", lines, "\n")
 			startln = 3
 			parse_section_2("PATCH", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-MEMORY~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY~~", scan.Text()) {
-			mem_info(lines)
+			fmt.Print("Starting parsing MEMORY information from line ", lines, "\n")
 			startln = 3
 			parse_section_2("MEMORY", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-MEMORY-SGA-ADVICE~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY-SGA-ADVICE~~", scan.Text()) {
-			sga_advice_info(lines)
+			fmt.Print("Starting parsing MEMORY-SGA-ADVICE information from line ", lines, "\n")
 			startln = 3
 			parse_section_2("MEMORY_SGA_ADVICE", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-MEMORY-PGA-ADVICE~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY-PGA-ADVICE~~", scan.Text()) {
-			pga_advice_info(lines)
+			fmt.Print("Starting parsing MEMORY-PGA-ADVICE information from line ", lines, "\n")
 			startln = 3
 			parse_section_2("MEMORY_PGA_ADVICE", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-SIZE-ON-DISK~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-SIZE-ON-DISK~~", scan.Text()) {
-			size_info(lines)
+			fmt.Print("Starting parsing SIZE-ON-DISK information from line ", lines, "\n")
 			startln = 3
 			parse_section_2("SIZE_ON_DISK", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-OSSTAT~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-OSSTAT~~", scan.Text()) {
-			osstat_info(lines)
+			fmt.Print("Starting parsing OSSTAT information from line ", lines, "\n")
 			startln = 3
 			parse_section_2("OSSTAT", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-MAIN-METRICS~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MAIN-METRICS~~", scan.Text()) {
-			main_metrics_info(lines)
+			fmt.Print("Starting parsing DATABASE-PARAMETERS information from line ", lines, "\n")
 			startln = 3
 			parse_section_2("MAIN_METRICS", *scan, startln, fname)
 		}
 		if len("~~BEGIN-DATABASE-PARAMETERS~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-DATABASE-PARAMETERS~~", scan.Text()) {
-			main_metrics_info(lines)
+			fmt.Print("Starting parsing DATABASE-PARAMETERS information from line ", lines, "\n")
 			startln = 3
 			parse_section_2("DATABASE_PARAMETERS", *scan, startln, fname)
+		}
+		if len("~~BEGIN-AVERAGE-ACTIVE-SESSIONS~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-AVERAGE-ACTIVE-SESSIONS~~", scan.Text()) {
+			fmt.Print("Starting parsing AVERAGE-ACTIVE-SESSIONS information from line ", lines, "\n")
+			startln = 3
+			parse_section_2("AVERAGE_ACTIVE_SESSIONS", *scan, startln, fname)
+		}
+		if len("~~BEGIN-IO-WAIT-HISTOGRAM~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-IO-WAIT-HISTOGRAM~~", scan.Text()) {
+			fmt.Print("Starting parsingIO-WAIT-HISTOGRAM information from line ", lines, "\n")
+			startln = 3
+			parse_section_2("IO_WAIT_HISTOGRAM", *scan, startln, fname)
+		}
+		if len("~~BEGIN-IO-OBJECT-TYPE~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-IO-OBJECT-TYPE~~", scan.Text()) {
+			fmt.Print("Starting parsing IO-OBJECT-TYPE information from line ", lines, "\n")
+			startln = 3
+			parse_section_2("IO_OBJECT_TYPE", *scan, startln, fname)
+		}
+		if len("~~BEGIN-IOSTAT-BY-FUNCTION~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-IOSTAT-BY-FUNCTION~~", scan.Text()) {
+			fmt.Print("Starting parsing IOSTAT-BY-FUNCTION information from line ", lines, "\n")
+			startln = 3
+			parse_section_2("IOSTAT_BY_FUNCTION", *scan, startln, fname)
+		}
+		if len("~~BEGIN-TOP-N-TIMED-EVENTS~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-TOP-N-TIMED-EVENTS~~", scan.Text()) {
+			fmt.Print("Starting parsing TOP-N-TIMED-EVENTS information from line ", lines, "\n")
+			startln = 3
+			parse_section_2("TOP_N_TIMED_EVENTS", *scan, startln, fname)
+		}
+		if len("~~BEGIN-SYSSTAT~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-SYSSTAT~~", scan.Text()) {
+			fmt.Print("Starting parsing SYSSTAT information from line ", lines, "\n")
+			startln = 3
+			parse_section_2("SYSSTAT", *scan, startln, fname)
+		}
+		if len("~~BEGIN-TOP-SQL-SUMMARY~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-TOP-SQL-SUMMARY~~", scan.Text()) {
+			fmt.Print("Starting parsing TOP-SQL-SUMMARY information from line ", lines, "\n")
+			startln = 3
+			parse_section_2("TOP_SQL_SUMMARY", *scan, startln, fname)
+		}
+		if len("~~BEGIN-TTOP-SQL-BY-SNAPID~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-TOP-SQL-BY-SNAPID~~", scan.Text()) {
+			fmt.Print("Starting parsing TOP-SQL-BY-SNAPID information from line ", lines, "\n")
+			startln = 3
+			parse_section_2("TOP_SQL_BY_SNAPID", *scan, startln, fname)
 		}
 
 		// line := scan.Bytes()
