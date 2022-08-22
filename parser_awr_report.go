@@ -40,8 +40,8 @@ var atpDB = map[string]string{
 
 var db *sql.DB
 var (
-	isUploadDB = flag.Bool("upload", true, "Upload to database")
-	fpath      = flag.String("fpath", "upload/awr-hist-1288227953-ORCL-14815-14820.out", "Path to the report file")
+	isUploadDB = flag.Bool("u", true, "Upload to database")
+	fpath      = flag.String("f", "upload/awr-hist-1288227953-ORCL-14815-14820.out", "Path to the report file")
 )
 
 // From Stathat blog https://blog.stathat.com/2012/10/10/time_any_function_in_go.html
@@ -113,7 +113,7 @@ func prepareStmtTxt(t string, sdata []string) (inserttxt string, createtable str
 
 func checkDBObject(dbname string, objname string) (int, error) {
 	//
-	defer elapsedTime(time.Now(), "chekObject")
+	//defer elapsedTime(time.Now(), "chekObject")
 	var cnt int
 	err := db.QueryRow("select count(*) from information_schema.tables where table_schema=? and table_name=?", dbname, objname).Scan(&cnt)
 	if err != nil {
@@ -133,6 +133,7 @@ func execStmt(tdll string) error {
 }
 
 func parse_section_2(sname string, scan bufio.Scanner, startln int, fname string) {
+	defer elapsedTime(time.Now(), sname)
 	lines := 0
 	var stmt *sql.Stmt
 	var cdata []string
