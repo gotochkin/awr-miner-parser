@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,7 +39,10 @@ var atpDB = map[string]string{
 }
 
 var db *sql.DB
-var isUploadDB = flag.Bool("upload", true, "Upload to database")
+var (
+	isUploadDB = flag.Bool("upload", true, "Upload to database")
+	fpath      = flag.String("fpath", "upload/awr-hist-1288227953-ORCL-14815-14820.out", "Path to the report file")
+)
 
 // From Stathat blog https://blog.stathat.com/2012/10/10/time_any_function_in_go.html
 func elapsedTime(t1 time.Time, fname string) {
@@ -136,23 +140,14 @@ func prepareStmtTxt(t string, sdata []string) (inserttxt string, createtable str
 	insertend := ") values("
 	createtable = "CREATE TABLE " + t + " ("
 	for _, v := range sdata {
-		insertstart = insertstart + v + ","
+		insertstart = insertstart + strings.ToUpper(v) + ","
 		insertend = insertend + "?,"
-		createtable = createtable + v + " varchar(100),"
+		createtable = createtable + strings.ToUpper(v) + " varchar(150),"
 	}
 	insertend = strings.Replace(insertend+")", ",)", ")", 1)
 	inserttxt = strings.Replace(insertstart+")", ",)", insertend, 1)
 	createtable = strings.Replace(createtable+")", ",)", ")", 1)
-	// stmt, err := db.Prepare(stmttxt)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer stmt.Close()
-	// for i := 1; i <= 5; i++ {
-	// 	if _, err := stmt.Exec(i, "Test "+strconv.Itoa(i), time.Now()); err != nil {
-	// 		log.Fatal(err)
-	// 	}
-	// }
+
 	return inserttxt, createtable
 }
 
@@ -177,10 +172,10 @@ func execStmt(tdll string) error {
 	return err
 }
 
-func parse_section_2(sname string, scan bufio.Scanner, startln int) {
+func parse_section_2(sname string, scan bufio.Scanner, startln int, fname string) {
 	lines := 0
 	var stmt *sql.Stmt
-	//fmt.Println(scan.Text())
+	var cdata []string
 	for scan.Scan() {
 		lines++
 		if strings.Contains(scan.Text(), "~~END-") {
@@ -191,11 +186,12 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 
 		if lines == startln-1 {
 			sdata := strings.Fields(scan.Text())
-			sdata = append(sdata, "MYFILENAME", "USEDATE")
+			sdata = append(sdata, "FILENAME", "USEDATE")
 			fmt.Println(sdata)
 			// Prepare the insert
 			inserttxt, createtable = prepareStmtTxt(sname, sdata)
-
+			fmt.Println(inserttxt)
+			fmt.Println(createtable)
 			//check if the table exists
 			chk, chkerr := checkDBObject("testdb", sname)
 			if chkerr != nil {
@@ -209,6 +205,7 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 					log.Fatalf("Unable to create object: %s", errddl)
 				}
 			}
+
 			var stmterr error
 			stmt, stmterr = db.Prepare(inserttxt)
 			if stmterr != nil {
@@ -216,30 +213,38 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int) {
 			}
 			defer stmt.Close()
 		}
-		fmt.Println(inserttxt)
-		fmt.Println(createtable)
+		//fmt.Println(inserttxt)
+		//fmt.Println(createtable)
 
+		// Get the columns length
 		if lines == startln {
-			sdata := strings.Fields(scan.Text())
-			fmt.Println(sdata)
+			cdata = strings.Split(scan.Text(), " ")
 		}
 
-		//
+		//Fill the table
 		if lines > startln && len(scan.Text()) > 0 {
-			sdata := strings.Fields(scan.Text())
-			sdata = append(sdata, "MyFileName", time.Now().Format("2006/01/02T15:04:05"))
-			fmt.Println(strings.Join(sdata, ","))
+			sdata := []string{}
+			ind := 0
+			for _, i := range cdata {
+				//
+				if len(scan.Text()) >= len(i)+ind {
+					//
+					sdata = append(sdata, scan.Text()[ind:len(i)+ind])
+					ind = ind + len(i) + 1
+				} else {
+					//
+					sdata = append(sdata, scan.Text()[ind:len(scan.Text())])
+				}
+			}
+			sdata = append(sdata, fname, time.Now().Format("2006/01/02T15:04:05"))
+			//fmt.Printf("Fields are: %q", sdata)
 			vargs := []any{}
 			for _, v := range sdata {
-				fmt.Print(v + " ")
-				//fmt.Print(i)
-				vargs = append(vargs, v)
+				vargs = append(vargs, strings.Trim(v, " "))
 			}
-			fmt.Print("\n")
-			fmt.Println(sdata[0])
-			// if _, execerr := stmt.Exec(vargs...); execerr != nil {
-			// 	log.Fatal(execerr)
-			// }
+			if _, execerr := stmt.Exec(vargs...); execerr != nil {
+				log.Fatal(execerr)
+			}
 
 			//fmt.Println(sdata)
 		}
@@ -254,7 +259,7 @@ func main() {
 	endln := 10000
 	maxSize := 4096
 	//path to report file - testing only
-	fpath := "upload/awr-hist-1288227953-ORCL-14815-14820.out"
+	//fpath := "upload/awr-hist-1288227953-ORCL-14815-14820.out"
 	//parse input variables
 	flag.Parse()
 	//Check db connection
@@ -286,7 +291,7 @@ func main() {
 	}
 
 	//open report file
-	rf, err := os.Open(fpath)
+	rf, err := os.Open(*fpath)
 	if err != nil {
 		fmt.Print("Error opening the file: ", err)
 	}
@@ -295,6 +300,11 @@ func main() {
 	if err != nil {
 		fmt.Print("Error getting information about the file: ", err)
 	}
+	fa, err := filepath.Abs(*fpath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fname := filepath.Base(fa)
 	maxSize = int(finf.Size())
 	scan := bufio.NewScanner(rf)
 	// Setting the buffer
@@ -306,55 +316,54 @@ func main() {
 		if len("~~BEGIN-OS-INFORMATION~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-OS-INFORMATION~~", scan.Text()) {
 			os_info(lines)
 			startln = 2
-			//fmt.Println(startln)
-			parse_section_2("OS", *scan, startln)
+			parse_section_2("OS", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-PATCH-HISTORY~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-PATCH-HISTORY~~", scan.Text()) {
 			patch_info(lines)
 			startln = 3
-			//parse_section_2("PATCH", *scan, startln)
+			parse_section_2("PATCH", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-MEMORY~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY~~", scan.Text()) {
 			mem_info(lines)
 			startln = 3
-			//parse_section_2("MEMORY", *scan, startln)
+			parse_section_2("MEMORY", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-MEMORY-SGA-ADVICE~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY-SGA-ADVICE~~", scan.Text()) {
 			sga_advice_info(lines)
 			startln = 3
-			//parse_section_2("SGA-ADVICE", *scan, startln)
+			parse_section_2("MEMORY_SGA_ADVICE", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-MEMORY-PGA-ADVICE~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MEMORY-PGA-ADVICE~~", scan.Text()) {
 			pga_advice_info(lines)
 			startln = 3
-			//parse_section_2("MEMORY-PGA-ADVICE", *scan, startln)
+			parse_section_2("MEMORY_PGA_ADVICE", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-SIZE-ON-DISK~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-SIZE-ON-DISK~~", scan.Text()) {
 			size_info(lines)
 			startln = 3
-			//parse_section_2("SIZE-ON-DISK", *scan, startln)
+			parse_section_2("SIZE_ON_DISK", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-OSSTAT~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-OSSTAT~~", scan.Text()) {
 			osstat_info(lines)
 			startln = 3
-			//parse_section_2("OSSTAT", *scan, startln)
+			parse_section_2("OSSTAT", *scan, startln, fname)
 		}
 
 		if len("~~BEGIN-MAIN-METRICS~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-MAIN-METRICS~~", scan.Text()) {
 			main_metrics_info(lines)
 			startln = 3
-			//parse_section_2("MAIN-METRICS", *scan, startln)
+			parse_section_2("MAIN_METRICS", *scan, startln, fname)
 		}
 		if len("~~BEGIN-DATABASE-PARAMETERS~~") == len(scan.Text()) && strings.EqualFold("~~BEGIN-DATABASE-PARAMETERS~~", scan.Text()) {
 			main_metrics_info(lines)
 			startln = 3
-			//parse_section_2("DATABASE-PARAMETERS", *scan, startln)
+			parse_section_2("DATABASE_PARAMETERS", *scan, startln, fname)
 		}
 
 		// line := scan.Bytes()
