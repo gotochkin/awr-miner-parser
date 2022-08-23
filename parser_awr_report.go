@@ -159,7 +159,7 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int, fname string
 				log.Fatal(chkerr)
 			}
 			// Purge data for the same filename statement
-			purgestmt := "DELETE FROM `" + strings.ToUpper(sname) + "`"
+			purgestmt := "DELETE FROM `" + strings.ToUpper(sname) + "` where FILENAME='" + fname + "'"
 			fmt.Println(chk)
 			if chk == 0 {
 				//
