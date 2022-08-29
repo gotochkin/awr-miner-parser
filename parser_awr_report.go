@@ -224,6 +224,8 @@ func parse_section_2(sname string, scan bufio.Scanner, startln int, fname string
 }
 
 func main() {
+	//Enable timing
+	defer elapsedTime(time.Now(), "Main")
 	//prepare initial variables
 	lines := 0
 	startln := 0
